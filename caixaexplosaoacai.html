@@ -1,0 +1,234 @@
+<!-- software caixa -->
+<!-- caixa explosao acai -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Caixa Explosão Açai</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background-color: #e7b5b5; }
+    h1, h2 { color: #8b008b; }
+    .container {
+      background: rgb(156, 60, 141);
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    label, input, select, button {
+      display: block;
+      margin: 10px 0;
+    }
+    .hidden { display: none; }
+    .comanda {
+      white-space: pre-line;
+      font-family: monospace;
+      background: #f9f9f9;
+      padding: 10px;
+      border: 1px dashed #999;
+    }
+    .navigation {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .navigation button {
+      background: #8b008b;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    .navigation button:hover {
+      background: #a020f0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Gerenciador de Caixa - Explosão Açai</h1>
+
+  <nav class="navigation">
+    <button onclick="mostrarSecao('preco')">Preço do Quilo</button>
+    <button onclick="mostrarSecao('pedido')">Lançar Pedido</button>
+    <button onclick="mostrarSecao('historico')">Histórico</button>
+    <button onclick="mostrarSecao('fechamento')">Fechamento de Caixa</button>
+    <button onclick="mostrarSecao('grafico')">Relatório Mensal</button>
+  </nav>
+
+  <div class="container" id="preco">
+    <h2>Definir Preço do Quilo</h2>
+    <label for="valorQuilo">Valor (R$):</label>
+    <input type="number" id="valorQuilo" step="0.01"/>
+    <button onclick="salvarValorQuilo()">Salvar</button>
+  </div>
+
+  <div class="container hidden" id="pedido">
+    <h2>Lançar Pedido</h2>
+    <label for="pesoProduto">Peso do Açai (kg):</label>
+    <input type="number" id="pesoProduto" step="0.01" />
+    <label for="metodoPagamento">Forma de Pagamento:</label>
+    <select id="metodoPagamento">
+      <option>Dinheiro</option>
+      <option>Cartão</option>
+      <option>Pix</option>
+    </select>
+    <label for="nomeCliente">Nome do cliente: </label>
+    <input type="text" id="nomeCliente" />
+    <button onclick="finalizarPedido()">Finalizar Pedido</button>
+    <div id="comanda" class="comanda"></div>
+  </div>
+
+  <div class="container hidden" id="historico">
+    <h2>Histórico</h2>
+    <button onclick="mostrarHistorico()">Mostrar Histórico</button>
+    <pre id="historicoTexto"></pre>
+  </div>
+
+  <div class="container hidden" id="fechamento">
+    <h2>Fechamento de Caixa</h2>
+    <button onclick="fecharCaixa()">Fechar Caixa</button>
+    <pre id="fechamentoTexto"></pre>
+  </div>
+
+  <div class="container hidden" id="grafico">
+    <h2>Relatório Mensal</h2>
+    <canvas id="graficoMensal" width="400" height="200"></canvas>
+    <button onclick="baixarPDF()">Exportar em PDF</button>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    let historico = JSON.parse(localStorage.getItem('historico')) || [];
+    let idPedido = 1;
+
+    function mostrarSecao(id) {
+      document.querySelectorAll('.container').forEach(div => div.classList.add('hidden'));
+      document.getElementById(id).classList.remove('hidden');
+      if (id === 'grafico') gerarGrafico();
+    }
+
+    function salvarValorQuilo() {
+      const valor = parseFloat(document.getElementById('valorQuilo').value);
+      if (!valor || valor <= 0) return alert("Informe um valor válido.");
+      localStorage.setItem('valorQuilo', valor);
+      alert("Valor do quilo salvo!");
+    }
+
+    function getValorQuilo() {
+      return parseFloat(localStorage.getItem('valorQuilo') || 0);
+    }
+
+    function finalizarPedido() {
+      const peso = parseFloat(document.getElementById('pesoProduto').value);
+      const metodo = document.getElementById('metodoPagamento').value;
+      const nome = document.getElementById('nomeCliente').value;
+      const valorQuilo = getValorQuilo();
+
+      if (!peso || peso <= 0 || !valorQuilo) {
+        alert('Preencha o peso e cadastre o valor do quilo!');
+        return;
+      }
+
+      const preco = peso * valorQuilo;
+      const dataAtual = new Date();
+      const data = dataAtual.toLocaleDateString();
+      const codigoPedido = `PED${idPedido++}`;
+
+      const comanda = `--- Explosão Açai ---\nPedido: ${codigoPedido}\nData: ${data}\nPeso: ${peso}kg\nPagamento: ${metodo}\nValor: R$ ${preco.toFixed(2)}\n${nome ? "Nome: " + nome : ""}`;
+      document.getElementById('comanda').textContent = comanda;
+
+      historico.push({
+        codigo: codigoPedido,
+        data,
+        peso,
+        preco,
+        metodo,
+        nome
+      });
+
+      localStorage.setItem('historico', JSON.stringify(historico));
+    }
+
+    function mostrarHistorico() {
+      if (historico.length === 0) {
+        document.getElementById('historicoTexto').textContent = "Nenhum pedido registrado ainda.";
+        return;
+      }
+
+      const agrupado = historico.reduce((acc, pedido) => {
+        if (!acc[pedido.data]) acc[pedido.data] = [];
+        acc[pedido.data].push(pedido);
+        return acc;
+      }, {});
+
+      let texto = "";
+      for (const data in agrupado) {
+        texto += `\n📅 ${data}\n`;
+        agrupado[data].forEach(p => {
+          texto += ` - ${p.codigo}: R$ ${p.preco.toFixed(2)} (${p.metodo})\n`;
+        });
+      }
+
+      document.getElementById('historicoTexto').textContent = texto;
+    }
+
+    function fecharCaixa() {
+      let totalDinheiro = 0, totalCartao = 0, totalPix = 0, totalGeral = 0;
+      historico.forEach(p => {
+        if (p.metodo === "Dinheiro") totalDinheiro += p.preco;
+        if (p.metodo === "Cartão") totalCartao += p.preco;
+        if (p.metodo === "Pix") totalPix += p.preco;
+        totalGeral += p.preco;
+      });
+
+      const texto = `💵 Dinheiro: R$ ${totalDinheiro.toFixed(2)}\n💳 Cartão: R$ ${totalCartao.toFixed(2)}\n🔷 Pix: R$ ${totalPix.toFixed(2)}\n\n📊 Total Geral: R$ ${totalGeral.toFixed(2)}`;
+      document.getElementById('fechamentoTexto').textContent = texto;
+    }
+
+    function gerarGrafico() {
+      const dadosMensais = {};
+      historico.forEach(p => {
+        const [dia, mes, ano] = p.data.split('/');
+        const chave = `${mes}/${ano}`;
+        if (!dadosMensais[chave]) dadosMensais[chave] = 0;
+        dadosMensais[chave] += p.preco;
+      });
+
+      const ctx = document.getElementById('graficoMensal').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(dadosMensais),
+          datasets: [{
+            label: 'Vendas por Mês (R$)',
+            data: Object.values(dadosMensais),
+            backgroundColor: '#8b008b'
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+
+    async function baixarPDF() {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF();
+      const canvas = document.getElementById('graficoMensal');
+      const imgData = canvas.toDataURL("image/png");
+      pdf.addImage(imgData, 'PNG', 10, 10, 180, 100);
+      pdf.save("relatorio_mensal.pdf");
+    }
+
+    window.onload = () => {
+      const preco = getValorQuilo();
+      if (preco) document.getElementById('valorQuilo').value = preco;
+    };
+  </script>
+</body>
+</html>
